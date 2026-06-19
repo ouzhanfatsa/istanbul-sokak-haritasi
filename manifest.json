@@ -2,7 +2,7 @@
   "name": "İstanbul Sokak Genişlik Haritası",
   "short_name": "Sokak Haritası",
   "description": "İstanbul sokaklarının genişliğini gösteren harita - Büyük otobüs geçer mi?",
-  "start_url": "/istanbul-sokak-haritasi.html",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f9fa",
   "theme_color": "#1a73e8",
