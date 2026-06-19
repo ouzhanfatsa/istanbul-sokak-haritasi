@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#1a73e8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sokak Haritası">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%231a73e8'/%3E%3Ctext x='96' y='118' font-size='90' text-anchor='middle' fill='white'%3E🗺️%3C/text%3E%3C/svg%3E">
+<title>İstanbul Sokak Genişlik Haritası</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif;background:#f8f9fa;overflow:hidden;color:#202124;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none;touch-action:manipulation}
+#map{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* Header - Google Maps benzeri */
+#header{position:absolute;top:0;left:0;right:0;z-index:1000;padding:8px 12px;display:flex;gap:8px;align-items:center;pointer-events:none}
+#header>*{pointer-events:auto}
+#searchBox{flex:1;display:flex;align-items:center;gap:8px;background:#fff;border-radius:28px;padding:0 8px 0 18px;height:48px;box-shadow:0 2px 10px rgba(0,0,0,.12);max-width:460px;margin:0 auto;position:relative}
+#searchBox .logo{font-size:.95rem;font-weight:700;color:#202124;white-space:nowrap}
+#searchBox .logo span{color:#1a73e8}
+#searchBox .divider{width:1px;height:26px;background:#e0e0e0;margin:0 4px}
+#searchBox .actions{display:flex;gap:4px;margin-left:auto}
+#searchBox .actions button{display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 14px;border:none;border-radius:20px;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;min-height:36px}
+#searchBox .actions button#loadBtn{background:#1a73e8;color:#fff}
+#searchBox .actions button#loadBtn:active{background:#1557b0;transform:scale(.96)}
+#searchBox .actions button#loadBtn:disabled{background:#9aa0a6;cursor:not-allowed;transform:none}
+#searchBox .actions button#clearBtn{background:transparent;color:#5f6368;padding:7px 10px}
+#searchBox .actions button#clearBtn:active{background:#f1f3f4}
+#searchBox .actions button#locBtn{background:transparent;color:#5f6368;padding:7px 10px;font-size:1rem}
+#searchBox .actions button#locBtn:active{background:#f1f3f4}
+#searchBox .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+
+/* Stats panel - mobilde bottom sheet, masaüstünde sağ üst */
+#statsSheet{position:absolute;z-index:1000;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.15);display:none;transition:transform .3s ease;max-height:55vh;overflow-y:auto}
+@media(min-width:768px){
+#statsSheet{top:74px;right:12px;bottom:auto;left:auto;border-radius:12px;min-width:180px;padding:14px 18px;box-shadow:0 2px 12px rgba(0,0,0,.12)}
+#statsSheet .handle{display:none}
+}
+@media(max-width:767px){
+#statsSheet{left:0;right:0;bottom:0;top:auto;padding:16px 18px 24px;border-radius:16px 16px 0 0}
+#statsSheet .handle{width:36px;height:4px;background:#dadce0;border-radius:2px;margin:0 auto 12px;display:block}
+}
+#statsSheet .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+#statsSheet .head .title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#5f6368}
+#statsSheet .head .closeBtn{background:none;border:none;font-size:1.2rem;color:#5f6368;cursor:pointer;padding:4px;line-height:1}
+#statsSheet .row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:.75rem;color:#3c4043}
+#statsSheet .row .val{font-weight:700}
+#statsSheet .row .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+#statsSheet .totalRow{border-top:1px solid #e8eaed;padding-top:7px;margin-top:5px;font-weight:700}
+#statsSheet .totalRow .val{color:#1a73e8}
+
+/* Legend - sol alt */
+#legend{position:absolute;bottom:32px;left:12px;z-index:1000;background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 2px 12px rgba(0,0,0,.12);min-width:155px}
+#legend .title{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#5f6368;margin-bottom:6px}
+#legend .item{display:flex;align-items:center;gap:7px;padding:2px 0;font-size:.7rem;color:#3c4043}
+#legend .item .swatch{width:24px;height:5px;border-radius:3px;flex-shrink:0}
+#legend .item .swatch.t1{height:7px}
+#legend .item .swatch.t2{height:5px}
+#legend .item .swatch.t3{height:3px}
+#legend .item .swatch.t4{height:3px}
+#legend .item .swatch.dash{height:3px;background:repeating-linear-gradient(90deg,#9aa0a6 0,#9aa0a6 4px,transparent 4px,transparent 7px)}
+@media(max-width:767px){
+#legend{bottom:84px;left:8px;padding:8px 12px;min-width:130px}
+#legend .title{font-size:.55rem}
+#legend .item{font-size:.62rem;padding:1px 0}
+#legend .item .swatch{width:18px}
+}
+
+/* Toast */
+#toast{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);z-index:9999;background:#323232;border-radius:8px;padding:10px 20px;font-size:.8rem;color:#fff;display:none;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap;pointer-events:none;text-align:center}
+@media(max-width:767px){
+#toast{bottom:80px;font-size:.7rem;padding:8px 16px;max-width:90%;white-space:normal}
+}
+
+/* Install prompt banner */
+#installBanner{position:absolute;bottom:150px;left:50%;transform:translateX(-50%);z-index:999;background:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 4px 24px rgba(0,0,0,.2);display:none;max-width:340px;width:90%;text-align:center}
+#installBanner .title{font-weight:700;font-size:.9rem;margin-bottom:4px}
+#installBanner .desc{font-size:.75rem;color:#5f6368;margin-bottom:12px}
+#installBanner .btns{display:flex;gap:8px;justify-content:center}
+#installBanner .btns button{padding:8px 20px;border:none;border-radius:20px;font-size:.8rem;font-weight:600;cursor:pointer}
+#installBanner .btns .installBtn{background:#1a73e8;color:#fff}
+#installBanner .btns .dismissBtn{background:#f1f3f4;color:#5f6368}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Leaflet tweaks */
+.leaflet-control-zoom{margin-bottom:50px!important}
+.leaflet-control-zoom a{background:#fff!important;color:#5f6368!important;border-color:#dadce0!important;width:36px!important;height:36px!important;line-height:36px!important;font-size:1.2rem!important}
+.leaflet-control-zoom a:active{background:#f1f3f4!important}
+.leaflet-control-attribution{background:rgba(255,255,255,.85)!important;color:#5f6368!important;font-size:.6rem!important;padding:2px 6px!important}
+.custom-popup .leaflet-popup-content-wrapper{background:#fff;color:#202124;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.custom-popup .leaflet-popup-tip{background:#fff}
+.custom-popup .leaflet-popup-content{margin:12px 14px;font-size:.78rem;line-height:1.6}
+.custom-popup .popup-name{font-size:.88rem;font-weight:700;margin-bottom:3px}
+.custom-popup .popup-label{color:#5f6368}
+.custom-popup .popup-val{font-weight:600}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="header">
+  <div id="searchBox">
+    <div class="logo">🗺️ <span>İstanbul</span></div>
+    <div class="divider"></div>
+    <div class="actions">
+      <button id="loadBtn"><span id="loadIcon">📡</span> <span id="loadText">Yükle</span></button>
+      <button id="clearBtn" title="Temizle">✕</button>
+      <button id="locBtn" title="Merkeze dön">🎯</button>
+    </div>
+  </div>
+</div>
+
+<div id="statsSheet">
+  <div class="handle"></div>
+  <div class="head">
+    <div class="title">🚌 Otobüs Geçiş Raporu</div>
+    <button class="closeBtn" id="closeStatsBtn">✕</button>
+  </div>
+  <div class="row"><span><span class="dot" style="background:#22c55e"></span>✅ İki otobüs rahat (&gt;7m)</span><span class="val" id="sWide">0</span></div>
+  <div class="row"><span><span class="dot" style="background:#eab308"></span>⚠️ Tek otobüs rahat (5-7m)</span><span class="val" id="sMed">0</span></div>
+  <div class="row"><span><span class="dot" style="background:#f97316"></span>🔶 Tek otobüs dikkatli (3.5-5m)</span><span class="val" id="sDar">0</span></div>
+  <div class="row"><span><span class="dot" style="background:#ef4444"></span>🚫 Otobüs geçemez (&lt;3.5m)</span><span class="val" id="sCok">0</span></div>
+  <div class="row"><span><span class="dot" style="background:#9aa0a6"></span>❓ Veri yok</span><span class="val" id="sUnk">0</span></div>
+  <div class="row totalRow"><span>🛣️ Toplam yol</span><span class="val" id="sTotal">0</span></div>
+</div>
+
+<div id="legend">
+  <div class="title">🚌 Otobüs Geçişi</div>
+  <div class="item"><div class="swatch t1" style="background:#22c55e"></div>✅ İki otobüs rahat</div>
+  <div class="item"><div class="swatch t2" style="background:#eab308"></div>⚠️ Tek otobüs rahat</div>
+  <div class="item"><div class="swatch t3" style="background:#f97316"></div>🔶 Dikkatli geçer</div>
+  <div class="item"><div class="swatch t4" style="background:#ef4444"></div>🚫 Geçemez</div>
+  <div class="item"><div class="swatch dash"></div>❓ Veri yok</div>
+</div>
+
+<div id="toast"></div>
+
+<div id="installBanner">
+  <div class="title">📱 Uygulamayı Yükle</div>
+  <div class="desc">İstanbul Sokak Haritası'nı ana ekranına ekle, uygulama gibi kullan.</div>
+  <div class="btns">
+    <button class="installBtn" id="installBtn">Ana Ekrana Ekle</button>
+    <button class="dismissBtn" id="dismissBtn">Şimdi Değil</button>
+  </div>
+</div>
+
+<script>
+/* ========== Harita ========== */
+const map = L.map('map', {
+  center: [41.015, 28.979],
+  zoom: 13,
+  zoomControl: false,
+  attributionControl: true,
+  tap: true,
+  bounceAtZoomLimits: false
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+/* ========== Değişkenler ========== */
+const roadLayer = L.layerGroup().addTo(map);
+let isLoading = false;
+let allRoads = [];
+let deferredPrompt = null;
+
+/* ========== Genişlik Kategorisi ========== */
+function getWidthCategory(tags) {
+  let w = parseFloat(tags.width);
+  if (!isNaN(w) && w > 0) {
+    if (w >= 7) return 'wide';
+    if (w >= 5) return 'med';
+    if (w >= 3.5) return 'dar';
+    return 'cok';
+  }
+  let lanes = parseInt(tags.lanes);
+  if (!isNaN(lanes) && lanes > 0) {
+    let est = lanes * 3.2;
+    if (est >= 7) return 'wide';
+    if (est >= 5) return 'med';
+    if (est >= 3.5) return 'dar';
+    return 'cok';
+  }
+  let hw = (tags.highway || '').toLowerCase();
+  const wideTypes = ['motorway','trunk'];
+  const medTypes = ['primary'];
+  const darTypes = ['secondary','tertiary'];
+  const cokTypes = ['residential','unclassified','service','living_street'];
+  if (wideTypes.includes(hw)) return 'wide';
+  if (medTypes.includes(hw)) return 'med';
+  if (darTypes.includes(hw)) return 'dar';
+  if (cokTypes.includes(hw)) return 'cok';
+  return 'unk';
+}
+
+function getWidthLabel(tags) {
+  let w = parseFloat(tags.width);
+  if (!isNaN(w) && w > 0) return w.toFixed(1) + ' metre';
+  let lanes = parseInt(tags.lanes);
+  if (!isNaN(lanes) && lanes > 0) return '~' + (lanes * 3.2).toFixed(1) + 'm (' + lanes + ' şerit)';
+  let hw = (tags.highway || '').toLowerCase();
+  const names = {
+    motorway: 'Otoyol', trunk: 'Ana arter', primary: 'Birincil yol',
+    secondary: 'İkincil yol', tertiary: 'Üçüncül yol',
+    residential: 'Yerleşim yolu', unclassified: 'Sınıflandırılmamış',
+    service: 'Servis yolu', living_street: 'Yaşayan sokak',
+    footway: 'Yaya yolu', cycleway: 'Bisiklet yolu',
+    path: 'Patika', track: 'Toprak yol'
+  };
+  return names[hw] || hw || 'Bilinmiyor';
+}
+
+function getBusText(cat) {
+  switch (cat) {
+    case 'wide': return '✅ Büyük otobüs rahatça geçer, iki yönlü trafik';
+    case 'med':  return '⚠️ Tek yönde otobüs rahat, iki otobüs zor';
+    case 'dar':  return '🔶 Tek otobüs dikkatli geçebilir, aynaları toplamalı';
+    case 'cok':  return '🚫 Büyük otobüs geçemez, yalnız araba';
+    default:     return '❓ Genişlik verisi yok';
+  }
+}
+
+function getStyle(cat) {
+  switch (cat) {
+    case 'wide': return { color: '#22c55e', weight: 5, opacity: .85 };
+    case 'med':  return { color: '#eab308', weight: 4, opacity: .75 };
+    case 'dar':  return { color: '#f97316', weight: 3, opacity: .65 };
+    case 'cok':  return { color: '#ef4444', weight: 2, opacity: .6 };
+    default:     return { color: '#9aa0a6', weight: 1.5, opacity: .3, dashArray: '4 5' };
+  }
+}
+
+/* ========== UI ========== */
+function showToast(msg, dur) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._hide);
+  t._hide = setTimeout(() => { t.style.display = 'none' }, dur || 2500);
+}
+
+function updateStats() {
+  const cats = { wide: 0, med: 0, dar: 0, cok: 0, unk: 0 };
+  allRoads.forEach(r => { cats[r.cat] = (cats[r.cat] || 0) + 1 });
+  document.getElementById('sTotal').textContent = allRoads.length;
+  document.getElementById('sWide').textContent = cats.wide;
+  document.getElementById('sMed').textContent = cats.med;
+  document.getElementById('sDar').textContent = cats.dar;
+  document.getElementById('sCok').textContent = cats.cok;
+  document.getElementById('sUnk').textContent = cats.unk;
+  document.getElementById('statsSheet').style.display = 'block';
+}
+
+function autoShowStats() {
+  if (allRoads.length > 0) document.getElementById('statsSheet').style.display = 'block';
+}
+
+/* ========== Veri Yükleme ========== */
+function loadRoads() {
+  if (isLoading) return;
+  isLoading = true;
+  const btn = document.getElementById('loadBtn');
+  const icon = document.getElementById('loadIcon');
+  const txt = document.getElementById('loadText');
+  btn.disabled = true;
+  icon.innerHTML = '<span class="spinner"></span>';
+  txt.textContent = 'Yükleniyor...';
+
+  const bounds = map.getBounds();
+  const padBounds = bounds.pad(0.15);
+  const bbox = padBounds.getSouth() + ',' + padBounds.getWest() + ',' + padBounds.getNorth() + ',' + padBounds.getEast();
+  const overpassUrl = 'https://overpass-api.de/api/interpreter';
+
+  const query = '[out:json][timeout:30];(\n  way["highway"]["width"](' + bbox + ');\n  way["highway"]["lanes"](' + bbox + ');\n  way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified|service|living_street"](' + bbox + ');\n);out body;>;out skel qt;';
+
+  fetch(overpassUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'data=' + encodeURIComponent(query)
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Sunucu hatası: ' + res.status);
+    return res.json();
+  })
+  .then(data => {
+    const nodeMap = {};
+    (data.elements || []).filter(el => el.type === 'node').forEach(n => { nodeMap[n.id] = [n.lat, n.lon] });
+
+    const ways = (data.elements || []).filter(el => el.type === 'way' && el.tags && el.tags.highway);
+    let added = 0;
+
+    ways.forEach(way => {
+      const coords = (way.nodes || []).map(id => nodeMap[id]).filter(Boolean);
+      if (coords.length < 2) return;
+      const cat = getWidthCategory(way.tags);
+      const label = getWidthLabel(way.tags);
+      const busText = getBusText(cat);
+      const name = way.tags.name || way.tags.ref || '';
+      const style = getStyle(cat);
+
+      const polyline = L.polyline(coords, style);
+      polyline.bindPopup(
+        '<div class="popup-name">' + (name || 'İsimsiz yol') + '</div>' +
+        '<div><span class="popup-label">🚧 Tip: </span><span class="popup-val">' + (way.tags.highway || '?') + '</span></div>' +
+        '<div><span class="popup-label">📏 Genişlik: </span><span class="popup-val">' + label + '</span></div>' +
+        '<div style="margin-top:5px;padding-top:5px;border-top:1px solid #e8eaed"><span>' + busText + '</span></div>',
+        { className: 'custom-popup', closeButton: true }
+      );
+
+      polyline.on('mouseover', function() { if (L.Browser.touch) return; this.setStyle({ opacity: 1, weight: this.options.weight + 2 }) });
+      polyline.on('mouseout', function() { if (L.Browser.touch) return; this.setStyle({ opacity: style.opacity, weight: style.weight }) });
+
+      polyline._roadData = { cat, label, name: name || 'İsimsiz yol' };
+      roadLayer.addLayer(polyline);
+      allRoads.push({ cat });
+      added++;
+    });
+
+    updateStats();
+    showToast('✅ ' + added + ' sokak yüklendi', 2000);
+
+    if (added === 0) showToast('ℹ️ Bu bölgede yol bulunamadı, yakınlaştırmayı dene', 3000);
+  })
+  .catch(err => {
+    showToast('❌ ' + err.message, 3500);
+  })
+  .finally(() => {
+    isLoading = false;
+    btn.disabled = false;
+    icon.innerHTML = '📡';
+    txt.textContent = 'Yükle';
+  });
+}
+
+function clearRoads() {
+  roadLayer.clearLayers();
+  allRoads = [];
+  document.getElementById('statsSheet').style.display = 'none';
+  showToast('🗑️ Temizlendi', 1200);
+}
+
+function goToIstanbul() {
+  map.flyTo([41.015, 28.979], 13);
+}
+
+/* ========== Event Listeners ========== */
+document.getElementById('loadBtn').addEventListener('click', loadRoads);
+document.getElementById('clearBtn').addEventListener('click', clearRoads);
+document.getElementById('locBtn').addEventListener('click', goToIstanbul);
+document.getElementById('closeStatsBtn').addEventListener('click', () => {
+  document.getElementById('statsSheet').style.display = 'none';
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !isLoading) loadRoads();
+});
+
+/* Harita hareket edince istatistikleri göster (eğer veri varsa) */
+map.on('moveend', autoShowStats);
+
+/* ========== PWA Kurulum ========== */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const banner = document.getElementById('installBanner');
+  setTimeout(() => { banner.style.display = 'block' }, 5000);
+});
+
+document.getElementById('installBtn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const result = await deferredPrompt.userChoice;
+  if (result.outcome === 'accepted') {
+    document.getElementById('installBanner').style.display = 'none';
+    showToast('✅ Uygulama ana ekrana eklendi!', 3000);
+  }
+  deferredPrompt = null;
+});
+
+document.getElementById('dismissBtn').addEventListener('click', () => {
+  document.getElementById('installBanner').style.display = 'none';
+});
+
+/* ========== Service Worker ========== */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+/* İlk yüklemede küçük bir gecikmeyle banner göster */
+setTimeout(() => {
+  if (deferredPrompt) document.getElementById('installBanner').style.display = 'block';
+}, 8000);
+
+/* ========== Popup stilleri ========== */
+const style = document.createElement('style');
+style.textContent = '.custom-popup .leaflet-popup-close-button{color:#5f6368!important;font-size:20px!important;top:4px!important;right:6px!important}.leaflet-popup-close-button:hover{background:transparent!important}';
+document.head.appendChild(style);
+
+console.log('🌆 İstanbul Sokak Genişlik Haritası hazır');
+</script>
+</body>
+</html>
